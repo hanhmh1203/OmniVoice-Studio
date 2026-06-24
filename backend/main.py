@@ -625,6 +625,78 @@ app = FastAPI(
 )
 
 
+def _capture_generate_request(content_type: str, body: bytes) -> None:
+    if not content_type:
+        return
+    try:
+        import json as _json
+        from datetime import datetime as _datetime
+        from email import policy as _email_policy
+        from email.parser import BytesParser as _BytesParser
+
+        capture_dir = os.environ.get(
+            "OMNIVOICE_CAPTURE_DIR",
+            os.path.join(os.getcwd(), "captured-generate-requests"),
+        )
+        os.makedirs(capture_dir, exist_ok=True)
+
+        message = _BytesParser(policy=_email_policy.default).parsebytes(
+            b"Content-Type: " + content_type.encode("utf-8", "replace") + b"\r\n\r\n" + body
+        )
+        fields = {}
+        files = {}
+        if message.is_multipart():
+            for part in message.iter_parts():
+                name = part.get_param("name", header="content-disposition")
+                if not name:
+                    continue
+                filename = part.get_filename()
+                payload = part.get_payload(decode=True) or b""
+                if filename:
+                    files[name] = {
+                        "filename": filename,
+                        "content_type": part.get_content_type(),
+                        "size": len(payload),
+                    }
+                else:
+                    charset = part.get_content_charset() or "utf-8"
+                    fields[name] = payload.decode(charset, "replace")
+
+        stamp = _datetime.now().strftime("%Y%m%d-%H%M%S-%f")
+        out = os.path.join(capture_dir, f"generate-{stamp}.json")
+        with open(out, "w", encoding="utf-8") as f:
+            _json.dump(
+                {
+                    "method": "POST",
+                    "path": "/generate",
+                    "content_type": content_type,
+                    "fields": fields,
+                    "files": files,
+                    "raw_body_bytes": len(body),
+                },
+                f,
+                ensure_ascii=False,
+                indent=2,
+            )
+        logging.getLogger("omnivoice.capture").info("Captured /generate request: %s", out)
+    except Exception:
+        logging.getLogger("omnivoice.capture").exception("Failed to capture /generate request")
+
+
+@app.middleware("http")
+async def capture_generate_middleware(request: Request, call_next):
+    capture_enabled = os.environ.get("OMNIVOICE_CAPTURE_GENERATE", "0").lower() in {"1", "true", "yes", "on"}
+    if capture_enabled and request.method == "POST" and request.url.path == "/generate":
+        body = await request.body()
+        _capture_generate_request(request.headers.get("content-type", ""), body)
+
+        async def _receive():
+            return {"type": "http.request", "body": body, "more_body": False}
+
+        request._receive = _receive
+    return await call_next(request)
+
+
 @app.get("/docs", include_in_schema=False)
 async def scalar_docs():
     """Interactive API documentation powered by Scalar."""

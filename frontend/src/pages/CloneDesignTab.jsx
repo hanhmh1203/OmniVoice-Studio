@@ -723,6 +723,7 @@ export default function CloneDesignTab(props) {
           </div>
           <label className="studio-action-bar__steps" title={t('clone.steps')}>
             <SlidersHorizontal size={12} className="label-icon" />
+            <span className="studio-action-bar__steps-label">{t('clone.steps')}</span>
             <input type="range" min="8" max="64" value={steps} onChange={e => setSteps(Number(e.target.value))} />
             <span className="val-bubble">{steps}</span>
           </label>

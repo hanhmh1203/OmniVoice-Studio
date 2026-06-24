@@ -258,7 +258,7 @@
   "clone": {
     "prompt": "Lời nhắc",
     "language": "Ngôn ngữ",
-    "steps": "bước",
+    "steps": "Số bước",
     "voice_source": "Nguồn giọng nói",
     "saved_profiles": "Hồ sơ đã lưu",
     "transcript": "bảng điểm",
